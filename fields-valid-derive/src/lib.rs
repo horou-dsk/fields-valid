@@ -7,7 +7,7 @@ use crate::validate::ValidateMeta;
 #[proc_macro_derive(FieldsValidate, attributes(valid))]
 pub fn derive(input: TokenStream) -> TokenStream {
     let st = syn::parse_macro_input!(input as syn::DeriveInput);
-    // eprintln!("{:#?}", st);
+    // eprintln!("{:#?}", st.generics.split_for_impl());
     match do_expand(&st) {
         Ok(token_stream) => token_stream.into(),
         Err(e) => e.to_compile_error().into(),
@@ -75,7 +75,7 @@ fn valid_expand(fields: &StructFields) -> syn::Result<proc_macro2::TokenStream> 
             let mt = meta.validate_token(&f.ident, field_type.is_some(), &type_);
             let msg = meta.err_msg;
             if !add_big_decimal && type_ == "BigDecimal" {
-                final_tokenstream.extend(quote!(use bigdecimal::ToPrimitive;));
+                final_tokenstream.extend(quote!(use ::bigdecimal::ToPrimitive;));
                 add_big_decimal = true;
             }
             final_tokenstream.extend(quote! {
@@ -92,9 +92,10 @@ fn do_expand(st: &syn::DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
     let struct_ident = &st.ident;  // 模板代码中不可以使用`.`来访问结构体成员，所以要在模板代码外面将标识符放到一个独立的变量中
     let fields = get_fields_from_derive_input(st)?;
     let ts = valid_expand(fields)?;
+    let (impl_generics, type_generics, where_clause) = st.generics.split_for_impl();
     Ok(
         quote! {
-            impl fields_valid::FieldsValidate for #struct_ident {
+            impl #impl_generics fields_valid::FieldsValidate for #struct_ident #type_generics #where_clause {
                 fn fields_validate(&self) -> std::result::Result<(), &'static str> {
                     #ts
                     std::result::Result::Ok(())
