@@ -11,6 +11,8 @@ struct User {
     email: String,
     #[valid(len(8, 17), "The minimum password length is 8 digits and the maximum is 16 digits")]
     password: String,
+    #[valid(eq("#password"), "The two passwords are inconsistent")]
+    password2: String,
     #[valid(len(5, 12), "The length of the phone number is incorrect")]
     #[valid(regex("\\d+"), "The phone number must be a number")]
     phone: Option<String>,
@@ -18,6 +20,7 @@ struct User {
     amount: u32,
 }
 
+#[inline]
 fn fields_validate<T: FieldsValidate>(fields: &T) -> Result<(), &'static str> {
     fields.fields_validate()
 }
@@ -26,6 +29,7 @@ fn main() {
     let user = User {
         email: "111@11a.com".to_string(),
         password: "12ndd232.23".to_string(),
+        password2: "1225".to_string(),
         phone: None, //Some("111111".to_string())
         amount: 7,
     };

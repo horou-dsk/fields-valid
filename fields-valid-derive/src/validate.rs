@@ -1,12 +1,14 @@
 use std::ops::Range;
 use syn::{NestedMeta::Lit, Lit::Int, Lit::Float, Lit::Str, NestedMeta};
 use quote::{quote};
+use syn::spanned::Spanned;
 
 #[derive(Debug)]
 pub enum ValidateRule {
     Len(Range<usize>),
     Range(Range<f64>),
     Regex(String),
+    Eq(String),
     Email,
 }
 
@@ -35,6 +37,7 @@ impl ValidateRule {
                         "len" => Self::from_len(nested),
                         "regex" => Self::from_regex(nested),
                         "range" => Self::from_range(nested),
+                        "eq" => Self::from_eq(nested),
                         _ => Err(syn::Error::new_spanned(seg, "参数错误！暂无该方法"))
                     }
                 } else {
@@ -99,8 +102,14 @@ impl ValidateRule {
         } else {
             Ok(Self::Range(one..one))
         }
-        // eprintln!("nested = {:#?}", nested);
-        // Ok(Self::Range(1_f64..10_f64))
+    }
+
+    fn from_eq(nested: ValidateNested) -> syn::Result<Self> {
+        if let Some(Lit(Str(eq))) = nested.first() {
+            Ok(Self::Eq(eq.value()))
+        } else {
+            Err(syn::Error::new_spanned(nested, "参数错误！"))
+        }
     }
 }
 
@@ -179,6 +188,14 @@ impl ValidateMeta {
                         quote!{!(#start..#end).contains(&self.#field_name.to_f64().unwrap())}
                     } else {
                         quote!{!(#start..#end).contains(&(self.#field_name as f64))}
+                    }
+                }
+                ValidateRule::Eq(eq) => {
+                    if eq.chars().next().unwrap_or('\0') == '#' {
+                        let other_field = syn::Ident::new(&eq[1..], o_field_name.span());
+                        quote!{self.#field_name != self.#other_field}
+                    } else {
+                        quote!{self.#field_name != #eq}
                     }
                 }
             };
