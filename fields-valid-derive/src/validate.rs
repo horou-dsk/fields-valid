@@ -114,13 +114,14 @@ impl ValidateRule {
 }
 
 #[derive(Debug)]
-pub struct ValidateMeta {
+pub struct ValidateMeta<'v> {
     validates: Vec<ValidateRule>,
     pub err_msg: String,
+    pub struct_ident: &'v syn::Ident,
 }
 
-impl ValidateMeta {
-    pub fn from_valid_attr(attr: &syn::Attribute) -> syn::Result<Self> {
+impl<'v> ValidateMeta<'v> {
+    pub fn from_valid_attr(attr: &syn::Attribute, struct_ident: &'v syn::Ident) -> syn::Result<Self> {
         let meta = match attr.parse_meta() {
             Ok(meta) => {
                 // eprintln!("meta = {:#?}", meta);
@@ -161,19 +162,36 @@ impl ValidateMeta {
             }
         }
         Ok(Self {
+            struct_ident,
             validates,
             err_msg: err_msg.unwrap_or("参数错误！".to_string())
         })
     }
 
-    pub fn validate_token(&self, o_field_name: &Option<syn::Ident>, is_optional: bool, type_name: &str) -> proc_macro2::TokenStream {
+    pub fn validate_token(
+        &self,
+        o_field_name: &Option<syn::Ident>,
+        is_optional: bool,
+        type_name: &str,
+        static_ref: (&mut Vec<syn::Ident>, &mut Vec<String>)
+    ) -> proc_macro2::TokenStream {
         let mut final_tokenstream = proc_macro2::TokenStream::new();
         let mut field_name = proc_macro2::TokenStream::new();
         field_name.extend(if is_optional {quote!(#o_field_name.as_ref().unwrap())} else {quote!(#o_field_name)});
         for (index, validate) in self.validates.iter().enumerate() {
             let t = match validate {
                 ValidateRule::Regex(rx) => {
-                    quote!(!fields_valid::validates::match_regex(#rx, &self.#field_name))
+                    let rex_name = format!(
+                        "{}_{}_REGEX",
+                        self.struct_ident.to_string().to_uppercase(),
+                        o_field_name.as_ref().unwrap().to_string().to_uppercase()
+                    );
+                    let rex_name_ident = syn::Ident::new(&rex_name, o_field_name.span());
+                    let qt = quote!(!#rex_name_ident.is_match(&self.#field_name));
+                    static_ref.0.push(rex_name_ident);
+                    static_ref.1.push(rx.clone());
+                    qt
+                    // quote!(!fields_valid::validates::match_regex(#rx, &self.#field_name))
                 }
                 ValidateRule::Len(range) => {
                     let min = range.start;

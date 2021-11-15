@@ -1,7 +1,10 @@
+lazy_static::lazy_static! {
+    static ref EMAIL_REGEX: ::regex::Regex = ::regex::Regex::new("^[\\da-zA-Z_-]+@([\\da-zA-Z_-]+\\.[\\da-zA-Z_-]+)+$").unwrap();
+}
+
 #[inline]
 pub fn email(v: &str) -> bool {
-    let rx = ::regex::Regex::new("^[\\da-zA-Z_-]+@([\\da-zA-Z_-]+\\.[\\da-zA-Z_-]+)+$").unwrap();
-    rx.is_match(v)
+    EMAIL_REGEX.is_match(v)
 }
 
 #[inline]

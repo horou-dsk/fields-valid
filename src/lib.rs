@@ -1,4 +1,6 @@
 pub use fields_valid_derive::*;
+pub use lazy_static::*;
+pub use regex::*;
 pub mod validates;
 
 pub trait FieldsValidate {

@@ -63,16 +63,23 @@ fn get_inner_type(ty: &syn::Type) -> String {
     "".to_string()
 }
 
-fn valid_expand(fields: &StructFields) -> syn::Result<proc_macro2::TokenStream> {
+fn valid_expand(fields: &StructFields, struct_ident: &syn::Ident) -> syn::Result<(proc_macro2::TokenStream, (Vec<syn::Ident>, Vec<String>))> {
     let mut final_tokenstream = proc_macro2::TokenStream::new();
     let mut add_big_decimal = false;
+    let mut static_ref: (Vec<syn::Ident>, Vec<String>) = (Vec::new(), Vec::new());
     for f in fields.iter() {
         for attr in f.attrs.iter() {
             // eprintln!("{:#?}", f);
-            let meta = ValidateMeta::from_valid_attr(attr)?;
+            let meta = ValidateMeta::from_valid_attr(attr, struct_ident)?;
             let field_type = get_optional_inner_type(&f.ty);
             let type_ = get_inner_type(field_type.unwrap_or(&f.ty));
-            let mt = meta.validate_token(&f.ident, field_type.is_some(), &type_);
+            let mt = meta
+                .validate_token(
+                    &f.ident,
+                    field_type.is_some(),
+                    &type_,
+                    (&mut static_ref.0, &mut static_ref.1)
+                );
             let msg = meta.err_msg;
             if !add_big_decimal && type_ == "BigDecimal" {
                 final_tokenstream.extend(quote!(use ::bigdecimal::ToPrimitive;));
@@ -85,17 +92,21 @@ fn valid_expand(fields: &StructFields) -> syn::Result<proc_macro2::TokenStream> 
             });
         }
     }
-    Ok(final_tokenstream)
+    Ok((final_tokenstream, static_ref))
 }
 
 fn do_expand(st: &syn::DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
     let struct_ident = &st.ident;  // 模板代码中不可以使用`.`来访问结构体成员，所以要在模板代码外面将标识符放到一个独立的变量中
     let fields = get_fields_from_derive_input(st)?;
-    let ts = valid_expand(fields)?;
+    let (ts, (rex_names, rex)) = valid_expand(fields, struct_ident)?;
     let (impl_generics, type_generics, where_clause) = st.generics.split_for_impl();
     Ok(
         quote! {
+            fields_valid::lazy_static! {
+                #(static ref #rex_names: fields_valid::Regex = fields_valid::Regex::new(#rex).unwrap();)*
+            }
             impl #impl_generics fields_valid::FieldsValidate for #struct_ident #type_generics #where_clause {
+                #[inline]
                 fn fields_validate(&self) -> std::result::Result<(), &'static str> {
                     #ts
                     std::result::Result::Ok(())

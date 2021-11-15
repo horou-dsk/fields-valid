@@ -6,3 +6,4 @@ edition = "2021"
 [dependencies]
 fields-valid-derive = {path = "fields-valid-derive" }
 regex = "1"
+lazy_static = "1"
