@@ -79,7 +79,7 @@ fn valid_expand(fields: &StructFields, struct_ident: &syn::Ident) -> syn::Result
                     field_type.is_some(),
                     &type_,
                     (&mut static_ref.0, &mut static_ref.1)
-                );
+                )?;
             let msg = meta.err_msg;
             if !add_big_decimal && type_ == "BigDecimal" {
                 final_tokenstream.extend(quote!(use ::bigdecimal::ToPrimitive;));

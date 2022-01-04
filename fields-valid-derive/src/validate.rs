@@ -118,17 +118,14 @@ pub struct ValidateMeta<'v> {
     validates: Vec<ValidateRule>,
     pub err_msg: String,
     pub struct_ident: &'v syn::Ident,
+    attr: &'v syn::Attribute
 }
 
 impl<'v> ValidateMeta<'v> {
-    pub fn from_valid_attr(attr: &syn::Attribute, struct_ident: &'v syn::Ident) -> syn::Result<Self> {
+    pub fn from_valid_attr(attr: &'v syn::Attribute, struct_ident: &'v syn::Ident) -> syn::Result<Self> {
         let meta = match attr.parse_meta() {
-            Ok(meta) => {
-                // eprintln!("meta = {:#?}", meta);
-                meta
-            },
+            Ok(meta) => meta,
             Err(err) => {
-                // eprintln!("attr = {:#?}", attr);
                 return Err(err)
             }
         };
@@ -162,6 +159,7 @@ impl<'v> ValidateMeta<'v> {
             }
         }
         Ok(Self {
+            attr,
             struct_ident,
             validates,
             err_msg: err_msg.unwrap_or("参数错误！".to_string())
@@ -174,7 +172,7 @@ impl<'v> ValidateMeta<'v> {
         is_optional: bool,
         type_name: &str,
         static_ref: (&mut Vec<syn::Ident>, &mut Vec<String>)
-    ) -> proc_macro2::TokenStream {
+    ) -> syn::Result<proc_macro2::TokenStream> {
         let mut final_tokenstream = proc_macro2::TokenStream::new();
         let mut field_name = proc_macro2::TokenStream::new();
         field_name.extend(if is_optional {quote!(#o_field_name.as_ref().unwrap())} else {quote!(#o_field_name)});
@@ -188,6 +186,9 @@ impl<'v> ValidateMeta<'v> {
                     );
                     let rex_name_ident = syn::Ident::new(&rex_name, o_field_name.span());
                     let qt = quote!(!#rex_name_ident.is_match(&self.#field_name));
+                    if static_ref.0.contains(&rex_name_ident) {
+                        return Err(syn::Error::new_spanned(self.attr, "重复声明"))
+                    }
                     static_ref.0.push(rex_name_ident);
                     static_ref.1.push(rx.clone());
                     qt
@@ -223,10 +224,10 @@ impl<'v> ValidateMeta<'v> {
                 final_tokenstream.extend(quote!(|| #t))
             }
         }
-        if is_optional {
+        Ok(if is_optional {
             quote! {self.#o_field_name.is_some() && (#final_tokenstream)}
         } else {
             final_tokenstream
-        }
+        })
     }
 }
